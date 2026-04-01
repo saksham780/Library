@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Library Management System — Library Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,900;1,500&family=Lora:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+
+  <!-- Inline critical search-dropdown styles -->
+  <style>
+    .search-wrap{position:relative}
+    #searchDropdown{
+      position:absolute;top:calc(100% + 8px);left:0;right:0;
+      background:var(--card);border:1px solid var(--border-hi);
+      border-radius:var(--radius-sm);box-shadow:0 12px 40px rgba(0,0,0,.6);
+      z-index:500;display:none;max-height:340px;overflow-y:auto;
+    }
+    .drop-section{
+      font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;
+      text-transform:uppercase;color:var(--text-muted);
+      padding:8px 14px 4px;
+    }
+    .drop-item{
+      display:flex;align-items:center;gap:10px;padding:9px 14px;
+      cursor:pointer;font-size:13.5px;color:var(--text);
+      transition:background .15s;
+    }
+    .drop-item:hover{background:var(--card-hover)}
+    .drop-item i{color:var(--gold);font-size:12px;width:14px}
+    .drop-item span{margin-left:auto;font-size:11.5px;color:var(--text-muted)}
+
+    .tx-filter-btn{
+      padding:6px 14px;border-radius:30px;border:1px solid var(--border);
+      background:var(--surface);color:var(--text-sub);cursor:pointer;
+      font-size:12px;font-family:'DM Mono',monospace;transition:all .2s;
+    }
+    .tx-filter-btn:hover{border-color:var(--gold);color:var(--gold)}
+    .tx-filter-btn.active{background:var(--gold-dim);border-color:rgba(212,168,67,.3);color:var(--gold)}
+
+    .issue-info-box{
+      background:var(--gold-dim);border:1px solid rgba(212,168,67,.25);
+      border-radius:var(--radius-sm);padding:14px 18px;
+      display:flex;gap:10px;align-items:flex-start;
+      font-size:13.5px;margin-bottom:20px;
+    }
+    .issue-info-box i{color:var(--gold);margin-top:2px}
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon">📚</div>
+    <div class="brand-title">Library Management System</div>
+    <div class="brand-sub">Library System</div>
+  </div>
+
+  <nav class="nav-section">
+    <div class="nav-label">Overview</div>
+    <div class="nav-item active" data-page="dashboard">
+      <i class="fa-solid fa-gauge-high"></i>
+      Dashboard
+    </div>
+  </nav>
+
+  <nav class="nav-section">
+    <div class="nav-label">Catalogue</div>
+    <div class="nav-item" data-page="books">
+      <i class="fa-solid fa-book"></i>
+      Books
+    </div>
+    <div class="nav-item" data-page="members">
+      <i class="fa-solid fa-users"></i>
+      Members
+    </div>
+  </nav>
+
+  <nav class="nav-section">
+    <div class="nav-label">Circulation</div>
+    <div class="nav-item" data-page="issue">
+      <i class="fa-solid fa-paper-plane"></i>
+      Issue Book
+    </div>
+    <div class="nav-item" data-page="transactions">
+      <i class="fa-solid fa-arrows-rotate"></i>
+      Transactions
+      <span class="nav-badge" id="overdueBadge"></span>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="avatar">LB</div>
+      <div>
+        <div class="user-name">Librarian</div>
+        <div class="user-role">admin</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- Hamburger -->
+<button class="hamburger" id="hamburger" aria-label="Menu">
+  <i class="fa-solid fa-bars"></i>
+</button>
+
+<!-- ═══════════════════ MAIN ═══════════════════ -->
+<div class="main">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <h2 class="topbar-title" id="topbarTitle">Dashboard</h2>
+    <div class="topbar-right">
+      <div class="search-wrap">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="globalSearch" placeholder="Search books, members…" autocomplete="off"/>
+        <div id="searchDropdown"></div>
+      </div>
+      <button class="topbar-btn" title="Notifications"><i class="fa-solid fa-bell"></i></button>
+    </div>
+  </header>
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <section class="page active" id="pageDashboard">
+    <div class="page-header">
+      <div>
+        <h2>Good day, Librarian 👋</h2>
+        <p>Here's what's happening in your library today.</p>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card stat-clickable" onclick="navigate('books')" title="View all books" style="--accent-color:var(--gold-glow);--icon-bg:var(--gold-dim);--icon-border:rgba(212,168,67,.3);--icon-color:var(--gold)">
+        <div class="stat-icon"><i class="fa-solid fa-book"></i></div>
+        <div class="stat-value" id="statBooks">—</div>
+        <div class="stat-label">Total Books</div>
+        <div class="stat-hint"><i class="fa-solid fa-arrow-right"></i> View Catalogue</div>
+      </div>
+      <div class="stat-card stat-clickable" onclick="navigate('members')" title="View all members" style="--accent-color:rgba(61,122,100,.08);--icon-bg:var(--sage-dim);--icon-border:rgba(61,122,100,.3);--icon-color:#4daa88">
+        <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
+        <div class="stat-value" id="statMembers">—</div>
+        <div class="stat-label">Active Members</div>
+        <div class="stat-hint"><i class="fa-solid fa-arrow-right"></i> View Members</div>
+      </div>
+      <div class="stat-card stat-clickable" onclick="navigateWithTxFilter('borrowed')" title="View borrowed books" style="--accent-color:rgba(52,97,168,.08);--icon-bg:var(--sky-dim);--icon-border:rgba(52,97,168,.3);--icon-color:#5a8cd4">
+        <div class="stat-icon"><i class="fa-solid fa-book-open"></i></div>
+        <div class="stat-value" id="statBorrowed">—</div>
+        <div class="stat-label">Books Borrowed</div>
+        <div class="stat-hint"><i class="fa-solid fa-arrow-right"></i> View Borrowed</div>
+      </div>
+      <div class="stat-card stat-clickable" onclick="navigateWithTxFilter('overdue')" title="View overdue books" style="--accent-color:var(--crimson-dim);--icon-bg:var(--crimson-dim);--icon-border:rgba(163,48,64,.3);--icon-color:#e05060">
+        <div class="stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="stat-value" id="statOverdue">—</div>
+        <div class="stat-label">Overdue Books</div>
+        <div class="stat-hint"><i class="fa-solid fa-arrow-right"></i> View Overdue</div>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="dash-grid">
+      <div class="chart-card">
+        <h3>Borrowing Activity — Last 7 Days</h3>
+        <div class="bar-chart" id="barChart"></div>
+      </div>
+      <div>
+        <div class="mini-card" style="margin-bottom:20px">
+          <h3>Popular Genres</h3>
+          <div id="genreList"><span class="spinner"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Browse by Category -->
+    <div class="table-card" style="margin-top:20px">
+      <div class="table-toolbar">
+        <h3>Browse by Category</h3>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('books')">All Books <i class="fa-solid fa-arrow-right"></i></button>
+      </div>
+      <div id="categoryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:16px 20px 20px">
+        <span class="spinner"></span>
+      </div>
+    </div>
+
+    <!-- Recent activity -->
+    <div class="table-card" style="margin-top:20px">
+      <div class="table-toolbar">
+        <h3>Recent Transactions</h3>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('transactions')">View all <i class="fa-solid fa-arrow-right"></i></button>
+      </div>
+      <div style="padding:0 20px" id="recentList"><div style="padding:30px 0;text-align:center"><span class="spinner"></span></div></div>
+    </div>
+  </section>
+
+  <!-- ═══ BOOKS ═══ -->
+  <section class="page" id="pageBooks">
+    <div class="page-header">
+      <div>
+        <h2>Book Catalogue</h2>
+        <p id="booksCount">Loading…</p>
+      </div>
+      <button class="btn btn-primary" id="addBookBtn">
+        <i class="fa-solid fa-plus"></i> Add Book
+      </button>
+    </div>
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <h3>All Books</h3>
+        <div class="filter-input">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="bookSearch" placeholder="Search title, author, ISBN…"/>
+        </div>
+        <div class="filter-input">
+          <i class="fa-solid fa-tag"></i>
+          <select id="genreFilter"><option value="">All genres</option></select>
+        </div>
+        <div class="filter-input">
+          <i class="fa-solid fa-filter"></i>
+          <select id="availFilter">
+            <option value="">All</option>
+            <option value="true">Available</option>
+          </select>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Title / Author</th>
+            <th>ISBN</th>
+            <th>Genre</th>
+            <th>Year</th>
+            <th>Rating</th>
+            <th>Copies</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="booksBody"><tr class="loading-row"><td colspan="7"><span class="spinner"></span></td></tr></tbody>
+      </table>
+      <div class="pagination" id="booksPag"></div>
+    </div>
+  </section>
+
+  <!-- ═══ MEMBERS ═══ -->
+  <section class="page" id="pageMembers">
+    <div class="page-header">
+      <div>
+        <h2>Members</h2>
+        <p id="membersCount">Loading…</p>
+      </div>
+      <button class="btn btn-primary" id="addMemberBtn">
+        <i class="fa-solid fa-user-plus"></i> Add Member
+      </button>
+    </div>
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <h3>All Members</h3>
+        <div class="filter-input">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="memberSearch" placeholder="Search name, email, phone…"/>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Name / Email</th>
+            <th>Phone</th>
+            <th>Member Since</th>
+            <th>Status</th>
+            <th>Borrows</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="membersBody"><tr class="loading-row"><td colspan="6"><span class="spinner"></span></td></tr></tbody>
+      </table>
+      <div class="pagination" id="membersPag"></div>
+    </div>
+  </section>
+
+  <!-- ═══ TRANSACTIONS ═══ -->
+  <section class="page" id="pageTransactions">
+    <div class="page-header">
+      <div>
+        <h2>Transactions</h2>
+        <p id="txCount">Loading…</p>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <h3>Borrow Records</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="tx-filter-btn active" data-status="">All</button>
+          <button class="tx-filter-btn" data-status="borrowed">Borrowed</button>
+          <button class="tx-filter-btn" data-status="overdue">Overdue</button>
+          <button class="tx-filter-btn" data-status="returned">Returned</button>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#ID</th>
+            <th>Book</th>
+            <th>Member</th>
+            <th>Issued</th>
+            <th>Due</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="txBody"><tr class="loading-row"><td colspan="7"><span class="spinner"></span></td></tr></tbody>
+      </table>
+      <div class="pagination" id="txPag"></div>
+    </div>
+  </section>
+
+  <!-- ═══ ISSUE BOOK ═══ -->
+  <section class="page" id="pageIssue">
+    <div class="page-header">
+      <div>
+        <h2>Issue a Book</h2>
+        <p>Assign a book to a member for borrowing.</p>
+      </div>
+    </div>
+
+    <div style="max-width:580px">
+      <div class="issue-info-box">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>Select an available book and an active member. The default loan period is <strong>14 days</strong>. A fine of <strong>₹2/day</strong> is applied for overdue returns.</span>
+      </div>
+
+      <div class="table-card" style="padding:28px">
+        <form id="issueForm">
+          <div class="form-group" style="margin-bottom:18px">
+            <label for="issueBookSel">Select Book</label>
+            <select class="form-control" id="issueBookSel" required>
+              <option value="">Loading…</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:18px">
+            <label for="issueMemberSel">Select Member</label>
+            <select class="form-control" id="issueMemberSel" required>
+              <option value="">Loading…</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:18px">
+            <label for="issueDays">Loan Period (days)</label>
+            <select class="form-control" id="issueDays">
+              <option value="7">7 days</option>
+              <option value="14" selected>14 days</option>
+              <option value="21">21 days</option>
+              <option value="30">30 days</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:24px">
+            <label for="issueNotes">Notes (optional)</label>
+            <textarea class="form-control" id="issueNotes" rows="2" placeholder="Any special notes…"></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="issueSubmitBtn" style="width:100%;justify-content:center">
+            <i class="fa-solid fa-paper-plane"></i> Issue Book
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /main -->
+
+<!-- ══════════════════ TOAST ══════════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ══════════════════ MODALS ══════════════════ -->
+
+<!-- Add/Edit Book -->
+<div class="overlay" id="bookModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="bookModalTitle">Add New Book</h3>
+      <button class="modal-close" id="closeBookModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <form id="bookForm">
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label for="bTitle">Title <span style="color:#e05060">*</span></label>
+            <input class="form-control" id="bTitle" placeholder="Book title" required/>
+          </div>
+          <div class="form-group form-full">
+            <label for="bAuthor">Author <span style="color:#e05060">*</span></label>
+            <input class="form-control" id="bAuthor" placeholder="Author name" required/>
+          </div>
+          <div class="form-group">
+            <label for="bIsbn">ISBN</label>
+            <input class="form-control" id="bIsbn" placeholder="978-…"/>
+          </div>
+          <div class="form-group">
+            <label for="bGenre">Genre</label>
+            <input class="form-control" id="bGenre" placeholder="Fiction, Sci-Fi…"/>
+          </div>
+          <div class="form-group">
+            <label for="bPublisher">Publisher</label>
+            <input class="form-control" id="bPublisher" placeholder="Publisher name"/>
+          </div>
+          <div class="form-group">
+            <label for="bYear">Publication Year</label>
+            <input class="form-control" id="bYear" type="number" min="1000" max="2099" placeholder="2024"/>
+          </div>
+          <div class="form-group form-full">
+            <label for="bCopies">Total Copies</label>
+            <input class="form-control" id="bCopies" type="number" min="1" value="1"/>
+          </div>
+          <div class="form-group form-full">
+            <label>Cover Colour</label>
+            <div class="color-row" id="colorPicker"></div>
+          </div>
+          <div class="form-group form-full">
+            <label for="bDesc">Description</label>
+            <textarea class="form-control" id="bDesc" placeholder="Short description of the book…"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="cancelBookModal">Cancel</button>
+      <button class="btn btn-primary" id="saveBookBtn" form="bookForm" type="submit">Save Book</button>
+    </div>
+  </div>
+</div>
+
+<!-- View Book -->
+<div class="overlay" id="viewBookModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Book Details</h3>
+      <button class="modal-close" id="closeViewBookModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="viewBookContent"></div>
+  </div>
+</div>
+
+<!-- Add/Edit Member -->
+<div class="overlay" id="memberModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="memberModalTitle">Add New Member</h3>
+      <button class="modal-close" id="closeMemberModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <form id="memberForm">
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label for="mName">Full Name <span style="color:#e05060">*</span></label>
+            <input class="form-control" id="mName" placeholder="Member's full name" required/>
+          </div>
+          <div class="form-group form-full">
+            <label for="mEmail">Email <span style="color:#e05060">*</span></label>
+            <input class="form-control" id="mEmail" type="email" placeholder="email@example.com" required/>
+          </div>
+          <div class="form-group">
+            <label for="mPhone">Phone</label>
+            <input class="form-control" id="mPhone" placeholder="+91 …"/>
+          </div>
+          <div class="form-group">
+            <label for="mAddress">Address</label>
+            <input class="form-control" id="mAddress" placeholder="City, State"/>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="cancelMemberModal">Cancel</button>
+      <button class="btn btn-primary" id="saveMemberBtn" form="memberForm" type="submit">Save Member</button>
+    </div>
+  </div>
+</div>
+
+<!-- View Member -->
+<div class="overlay" id="viewMemberModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Member Profile</h3>
+      <button class="modal-close" id="closeViewMemberModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="viewMemberContent"></div>
+  </div>
+</div>
+
+<!-- Chat Bot -->
+<button class="chat-toggle" onclick="toggleChat()">💬</button>
+<div class="chatbot-container">
+    <div class="chatbot-header">Library Assistant</div>
+
+    <div class="chatbot-messages" id="chatMessages"></div>
+
+    <div class="chatbot-input">
+        <input type="text" id="chatInput" placeholder="Ask for book recommendations..." />
+        <button onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
