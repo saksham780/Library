@@ -47,6 +47,12 @@
       font-size:13.5px;margin-bottom:20px;
     }
     .issue-info-box i{color:var(--gold);margin-top:2px}
+
+    /* Checkbox row for book modal */
+    .form-check{display:flex;align-items:center;gap:8px;cursor:pointer}
+    .form-check input[type="checkbox"]{
+      width:16px;height:16px;accent-color:var(--gold);cursor:pointer;
+    }
   </style>
 </head>
 <body>
@@ -194,6 +200,23 @@
       </div>
       <div style="padding:0 20px" id="recentList"><div style="padding:30px 0;text-align:center"><span class="spinner"></span></div></div>
     </div>
+
+    <!-- ═══ TRENDING SHELVES (OTT-Style) ═══ -->
+    <div id="trendingShelvesWrap" style="margin-top:36px">
+      <!-- Hero banner -->
+      <div class="trending-hero">
+        <div class="trending-hero-content">
+          <div class="trending-hero-label"><i class="fa-solid fa-fire"></i> Discover</div>
+          <h2 class="trending-hero-title">Your Reading Universe</h2>
+          <p class="trending-hero-sub">Curated shelves based on what readers love — updated live from your library</p>
+        </div>
+        <div class="trending-hero-icons">📚 🌟 🔥 📖</div>
+      </div>
+      <!-- Shelves rendered here by JS -->
+      <div id="trendingShelves">
+        <div style="padding:40px 0;text-align:center"><span class="spinner"></span></div>
+      </div>
+    </div>
   </section>
 
   <!-- ═══ BOOKS ═══ -->
@@ -240,7 +263,7 @@
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="booksBody"><tr class="loading-row"><td colspan="7"><span class="spinner"></span></td></tr></tbody>
+        <tbody id="booksBody"><tr class="loading-row"><td colspan="8"><span class="spinner"></span></td></tr></tbody>
       </table>
       <div class="pagination" id="booksPag"></div>
     </div>
@@ -382,6 +405,7 @@
 <!-- ══════════════════ MODALS ══════════════════ -->
 
 <!-- Add/Edit Book -->
+<!-- FIX: Added missing bRating, bBestseller, bEditions fields that app.js references -->
 <div class="overlay" id="bookModal">
   <div class="modal">
     <div class="modal-header">
@@ -415,9 +439,26 @@
             <label for="bYear">Publication Year</label>
             <input class="form-control" id="bYear" type="number" min="1000" max="2099" placeholder="2024"/>
           </div>
-          <div class="form-group form-full">
+          <div class="form-group">
             <label for="bCopies">Total Copies</label>
             <input class="form-control" id="bCopies" type="number" min="1" value="1"/>
+          </div>
+          <div class="form-group">
+            <!-- FIX: Added missing bEditions field -->
+            <label for="bEditions">Editions</label>
+            <input class="form-control" id="bEditions" type="number" min="1" placeholder="e.g. 3"/>
+          </div>
+          <div class="form-group">
+            <!-- FIX: Added missing bRating field -->
+            <label for="bRating">Rating (0 – 5)</label>
+            <input class="form-control" id="bRating" type="number" min="0" max="5" step="0.1" placeholder="e.g. 4.2"/>
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:4px">
+            <!-- FIX: Added missing bBestseller checkbox -->
+            <label class="form-check">
+              <input type="checkbox" id="bBestseller"/>
+              Mark as Bestseller
+            </label>
           </div>
           <div class="form-group form-full">
             <label>Cover Colour</label>
@@ -437,14 +478,85 @@
   </div>
 </div>
 
-<!-- View Book -->
-<div class="overlay" id="viewBookModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 class="modal-title">Book Details</h3>
-      <button class="modal-close" id="closeViewBookModal"><i class="fa-solid fa-xmark"></i></button>
+<!-- View Book — Netflix-style Detail Panel -->
+<div class="overlay bd-overlay" id="viewBookModal">
+  <div class="bd-panel">
+
+    <!-- ── Hero ── -->
+    <div class="bd-hero" id="bdHero">
+      <div class="bd-hero-bg" id="bdHeroBg"></div>
+      <div class="bd-hero-gradient"></div>
+
+      <button class="bd-close-btn" id="closeViewBookModal" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="bd-hero-inner">
+        <!-- 3D Book Spine Visual -->
+        <div class="bd-book-visual" id="bdBookVisual">
+          <div class="bd-book-3d" id="bdBook3d">
+            <div class="bd-book-front" id="bdBookFront">
+              <div class="bd-book-front-content">
+                <div class="bd-spine-title" id="bdSpineTitle"></div>
+                <div class="bd-spine-author" id="bdSpineAuthor"></div>
+              </div>
+            </div>
+            <div class="bd-book-side"></div>
+          </div>
+        </div>
+
+        <!-- Info -->
+        <div class="bd-hero-info">
+          <div class="bd-badge-row" id="bdBadgeRow"></div>
+          <h1 class="bd-title" id="bdTitle">Loading…</h1>
+          <p class="bd-author-line" id="bdAuthorLine"></p>
+          <div class="bd-rating-row" id="bdRatingRow"></div>
+          <div class="bd-quick-stats" id="bdQuickStats"></div>
+          <div class="bd-action-row">
+            <button class="btn btn-primary bd-borrow-btn" id="bdBorrowBtn">
+              <i class="fa-solid fa-paper-plane"></i> Borrow Book
+            </button>
+            <button class="btn btn-ghost bd-edit-btn" id="bdEditBtn">
+              <i class="fa-solid fa-pen"></i> Edit
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="modal-body" id="viewBookContent"></div>
+
+    <!-- ── Tabs ── -->
+    <div class="bd-tabs-bar">
+      <button class="bd-tab active" data-tab="overview"><i class="fa-solid fa-book-open-reader"></i> Overview</button>
+      <button class="bd-tab"        data-tab="chapters"><i class="fa-solid fa-list-ol"></i> Chapters</button>
+      <button class="bd-tab"        data-tab="details"> <i class="fa-solid fa-circle-info"></i> Details</button>
+    </div>
+
+    <!-- ── Tab Panels ── -->
+    <div class="bd-body">
+
+      <div class="bd-tab-panel active" id="tabOverview">
+        <div class="bd-description" id="bdDescription">
+          <h3><i class="fa-solid fa-align-left"></i> About this book</h3>
+          <p id="bdDescText">No description available.</p>
+        </div>
+        <div class="bd-genre-section" id="bdGenreSection"></div>
+        <div class="bd-wiki-row" id="bdWikiRow"></div>
+      </div>
+
+      <div class="bd-tab-panel" id="tabChapters">
+        <div class="bd-chapters-header" id="bdChaptersHeader">
+          <div class="bd-chapters-meta" id="bdChaptersMeta"></div>
+        </div>
+        <div class="bd-chapters-list" id="bdChaptersList">
+          <div style="text-align:center;padding:40px 0"><span class="spinner"></span></div>
+        </div>
+      </div>
+
+      <div class="bd-tab-panel" id="tabDetails">
+        <div class="bd-details-grid" id="bdDetailsGrid"></div>
+      </div>
+
+    </div>
   </div>
 </div>
 
@@ -495,18 +607,48 @@
   </div>
 </div>
 
-<!-- Chat Bot -->
-<button class="chat-toggle" onclick="toggleChat()">💬</button>
-<div class="chatbot-container">
-    <div class="chatbot-header">Library Assistant</div>
+<!-- ══════════════════ CHAT BOT ══════════════════ -->
+<!-- FIX: Added id="chatbotContainer" — was missing, caused toggleChat() to crash with null reference -->
+<button class="chat-toggle" id="chatToggle" onclick="toggleChat()" aria-label="Open library assistant">💬</button>
 
-    <div class="chatbot-messages" id="chatMessages"></div>
+<div class="chatbot-container" id="chatbotContainer">
 
-    <div class="chatbot-input">
-        <input type="text" id="chatInput" placeholder="Ask for book recommendations..." />
-        <button onclick="sendMessage()">Send</button>
+  <!-- FIX: Added proper header with avatar, status indicator, and close button -->
+  <div class="chatbot-header">
+    <div class="chatbot-header-avatar">📚</div>
+    <div class="chatbot-header-info">
+      <div class="chatbot-header-title">Library Assistant</div>
+      <div class="chatbot-header-status">Online</div>
     </div>
+    <button class="chatbot-close" onclick="toggleChat()" title="Close chat" aria-label="Close chat">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+
+  <!-- FIX: Added id="chatSuggestions" — was missing, caused useSuggestion() and sendMessage() to silently fail -->
+  <div class="chat-suggestions" id="chatSuggestions">
+    <span class="suggestion-chip" onclick="useSuggestion('Show available books')">📖 Available books</span>
+    <span class="suggestion-chip" onclick="useSuggestion('Who has overdue books?')">⚠️ Overdue</span>
+    <span class="suggestion-chip" onclick="useSuggestion('Recommend a fiction book')">✨ Recommend</span>
+    <span class="suggestion-chip" onclick="useSuggestion('How many members are active?')">👥 Members</span>
+  </div>
+
+  <div class="chatbot-messages" id="chatMessages"></div>
+
+  <div class="chatbot-input">
+    <input type="text" id="chatInput" placeholder="Ask for book recommendations…" autocomplete="off"/>
+    <!-- FIX: Replaced plain "Send" button with styled chatbot-send-btn matching CSS -->
+    <button class="chatbot-send-btn" onclick="sendMessage()" aria-label="Send message">
+      <i class="fa-solid fa-paper-plane"></i>
+    </button>
+  </div>
+
 </div>
+
+
+
+
+
 
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

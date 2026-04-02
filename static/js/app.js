@@ -129,32 +129,6 @@ $('hamburger').addEventListener('click', () => $('sidebar').classList.toggle('op
 // ══════════════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════════════
-function sendMessage() {
-    let input = document.getElementById("chatInput");
-    let messages = document.getElementById("chatMessages");
-
-    let userMsg = document.createElement("div");
-    userMsg.className = "message-user";
-    userMsg.innerText = input.value;
-    messages.appendChild(userMsg);
-
-    fetch("http://127.0.0.1:5000/chatbot", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({message: input.value})
-    })
-    .then(res => res.json())
-    .then(data => {
-        let botMsg = document.createElement("div");
-        botMsg.className = "message-bot";
-        botMsg.innerText = data.response;
-        messages.appendChild(botMsg);
-        messages.scrollTop = messages.scrollHeight;
-    });
-
-    input.value = "";
-}
-
 async function loadDashboard() {
   try {
     const d = await apiFetch('/api/dashboard');
@@ -169,6 +143,7 @@ async function loadDashboard() {
     renderGenres(d.genres);
     renderRecentActivity(d.recent);
     renderCategoryGrid();
+    loadTrending();
 
     // overdue badge in sidebar
     const badge = $('overdueBadge');
@@ -217,7 +192,6 @@ function renderRecentActivity(txns) {
     </div>`;
   }).join('');
 }
-
 
 // Genre icon/color map
 const GENRE_META = {
@@ -281,7 +255,9 @@ async function loadBooks() {
     renderBooksTable(d.books);
     renderPagination('booksPag', d.total, booksPage, 15, p => { booksPage = p; loadBooks(); });
     $('booksCount').textContent = `${d.total} book${d.total!==1?'s':''}`;
-  } catch (e) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#e05060;padding:30px">Error loading books</td></tr>`; }
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#e05060;padding:30px">Error loading books</td></tr>`;
+  }
 }
 
 function renderStars(rating) {
@@ -290,7 +266,7 @@ function renderStars(rating) {
   const half = rating - full >= 0.5 ? 1 : 0;
   const empty = 5 - full - half;
   return '<span style="color:#f5c518;font-size:13px;letter-spacing:1px">'
-    + '★'.repeat(full) + (half ? '½' : '') + '<span style="color:#555">'  + '★'.repeat(empty) + '</span></span>'
+    + '★'.repeat(full) + (half ? '½' : '') + '<span style="color:#555">' + '★'.repeat(empty) + '</span></span>'
     + ' <span style="font-size:11px;color:var(--text-muted)">(' + rating.toFixed(1) + ')</span>';
 }
 
@@ -300,15 +276,18 @@ function renderBooksTable(books) {
     tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><i class="fa-solid fa-book-open"></i><h3>No books found</h3><p>Try adjusting your search or add a new book.</p></div></td></tr>`;
     return;
   }
+
   tbody.innerHTML = books.map(b => `
-    <tr>
-      <td><div style="display:flex;align-items:center;gap:10px">
-        <div class="book-spine" style="background:${b.cover_color}"></div>
-        <div>
-          <div class="td-title">${escHtml(b.title)}${b.is_bestseller ? ' <span style="background:#c9a84c20;color:#c9a84c;border:1px solid #c9a84c60;border-radius:4px;font-size:10px;padding:1px 5px;font-weight:600">★ BESTSELLER</span>' : ''}</div>
-          <div class="td-sub">${escHtml(b.author)}</div>
+    <tr onclick="viewBook(${b.id});" style="cursor: pointer;">
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="book-spine" style="background:${b.cover_color}"></div>
+          <div>
+            <div class="td-title">${escHtml(b.title)}${b.is_bestseller ? ' <span style="background:#c9a84c20;color:#c9a84c;border:1px solid #c9a84c60;border-radius:4px;font-size:10px;padding:1px 5px;font-weight:600">★ BESTSELLER</span>' : ''}</div>
+            <div class="td-sub">${escHtml(b.author)}</div>
+          </div>
         </div>
-      </div></td>
+      </td>
       <td><span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${b.isbn||'—'}</span></td>
       <td>${b.genre ? `<span class="badge" style="background:rgba(212,168,67,.1);color:var(--gold);border:1px solid rgba(212,168,67,.25)">${b.genre}</span>` : '—'}</td>
       <td>${b.year||'—'}</td>
@@ -317,12 +296,15 @@ function renderBooksTable(books) {
       <td>${b.avail_copies > 0
         ? '<span class="badge badge-available"><i class="fa-solid fa-circle" style="font-size:7px"></i>Available</span>'
         : '<span class="badge badge-unavailable"><i class="fa-solid fa-circle" style="font-size:7px"></i>Out</span>'}</td>
-      <td><div class="actions">
-        <button class="btn btn-ghost btn-xs" onclick="viewBook(${b.id})"><i class="fa-solid fa-eye"></i></button>
-        <button class="btn btn-ghost btn-xs" onclick="editBook(${b.id})"><i class="fa-solid fa-pen"></i></button>
-        <button class="btn btn-danger btn-xs" onclick="deleteBook(${b.id},'${escHtml(b.title)}')"><i class="fa-solid fa-trash"></i></button>
-      </div></td>
-    </tr>`).join('');
+      <td>
+        <div class="actions">
+          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); viewBook(${b.id})"><i class="fa-solid fa-eye"></i></button>
+          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); editBook(${b.id})"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn btn-danger btn-xs" onclick="event.stopPropagation(); deleteBook(${b.id},'${escHtml(b.title)}')"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
 }
 
 // Book search/filter wiring
@@ -335,6 +317,7 @@ async function populateGenreFilter() {
   try {
     const genres = await apiFetch('/api/genres');
     const sel = $('genreFilter');
+    while (sel.options.length > 1) sel.remove(1); // keep the "All Genres" placeholder
     genres.forEach(g => {
       const o = document.createElement('option');
       o.value = g; o.textContent = g;
@@ -369,6 +352,7 @@ function openBookModal(book = null) {
     $('bRating').value       = '';
     $('bBestseller').checked = false;
     $('bEditions').value     = '';
+    $('bCopies').value       = 1;
     selectedColor = COLORS[0];
   }
   renderColorPicker();
@@ -432,41 +416,230 @@ window.editBook = async id => {
   } catch { toast('Failed to load book', 'error'); }
 };
 
+// ── BOOK DETAIL MODAL ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// BOOK DETAIL — Netflix-style panel
+// ══════════════════════════════════════════════════════════
+
+let _bdCurrentBook = null;   // cache for the currently open book
+let _bdTabsReady   = false;  // prevent re-binding tab listeners
+
+function bdOpenModal()  { $('viewBookModal').classList.add('open');  document.body.style.overflow = 'hidden'; }
+function bdCloseModal() { $('viewBookModal').classList.remove('open'); document.body.style.overflow = ''; }
+
+// ── Tab switching ─────────────────────────────────────────
+function bdInitTabs() {
+  if (_bdTabsReady) return;
+  _bdTabsReady = true;
+  document.querySelectorAll('.bd-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.bd-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.bd-tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const panel = $('tab' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1));
+      if (panel) panel.classList.add('active');
+      if (tab.dataset.tab === 'chapters' && _bdCurrentBook) bdLoadChapters(_bdCurrentBook.id);
+    });
+  });
+  $('closeViewBookModal').addEventListener('click', bdCloseModal);
+  $('viewBookModal').addEventListener('click', e => { if (e.target === $('viewBookModal')) bdCloseModal(); });
+}
+
+// ── Hero population ───────────────────────────────────────
+function bdPopulateHero(b) {
+  // Animated gradient background from cover color
+  const heroBg = $('bdHeroBg');
+  heroBg.style.background = `radial-gradient(ellipse at 20% 50%, ${b.cover_color}55 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, ${b.cover_color}33 0%, transparent 50%)`;
+
+  // 3D book
+  const front = $('bdBookFront');
+  front.style.background = `linear-gradient(160deg, ${lightenColor(b.cover_color, 20)}, ${b.cover_color} 60%, ${darkenColor(b.cover_color, 20)})`;
+  $('bdBook3d').querySelector('.bd-book-side').style.background = darkenColor(b.cover_color, 30);
+  $('bdSpineTitle').textContent  = b.title;
+  $('bdSpineAuthor').textContent = b.author;
+  const textClr = isLightColor(b.cover_color) ? '#1a1a1a' : '#ffffff';
+  $('bdSpineTitle').style.color  = textClr;
+  $('bdSpineAuthor').style.color = textClr + 'bb';
+
+  // Badges
+  const badges = [];
+  if (b.is_bestseller) badges.push(`<span class="bd-badge bd-badge-gold"><i class="fa-solid fa-fire"></i> Bestseller</span>`);
+  if (b.genre) badges.push(`<span class="bd-badge bd-badge-genre">${escHtml(b.genre)}</span>`);
+  if (b.avail_copies > 0) badges.push(`<span class="bd-badge bd-badge-avail"><i class="fa-solid fa-circle" style="font-size:7px"></i> Available</span>`);
+  else                     badges.push(`<span class="bd-badge bd-badge-out"><i class="fa-solid fa-circle" style="font-size:7px"></i> Out</span>`);
+  $('bdBadgeRow').innerHTML = badges.join('');
+
+  // Title & author
+  $('bdTitle').textContent = b.title;
+  $('bdAuthorLine').innerHTML = `by <span class="bd-author-name">${escHtml(b.author)}</span>`;
+
+  // Rating
+  if (b.rating) {
+    const full = Math.floor(b.rating);
+    const stars = '★'.repeat(full) + (b.rating - full >= 0.5 ? '½' : '') + '<span style="color:#333">' + '★'.repeat(5 - full - (b.rating - full >= 0.5 ? 1 : 0)) + '</span>';
+    $('bdRatingRow').innerHTML = `<span class="bd-stars">${stars}</span><span class="bd-rating-num">${b.rating.toFixed(1)}</span><span class="bd-rating-label">/ 5.0</span>`;
+  } else {
+    $('bdRatingRow').innerHTML = `<span style="color:var(--text-muted);font-size:13px">No rating yet</span>`;
+  }
+
+  // Quick stat pills (will update when chapters load)
+  $('bdQuickStats').innerHTML = `
+    <div class="bd-stat-pill" id="bdStatYear"><i class="fa-solid fa-calendar"></i> ${b.year || 'Unknown'}</div>
+    <div class="bd-stat-pill" id="bdStatCopies"><i class="fa-solid fa-copy"></i> ${b.avail_copies}/${b.total_copies} copies</div>
+    <div class="bd-stat-pill" id="bdStatPages"><i class="fa-solid fa-file-lines"></i> <span class="spinner" style="width:14px;height:14px;border-width:2px"></span></div>
+    <div class="bd-stat-pill" id="bdStatChaps"><i class="fa-solid fa-list-ol"></i> <span class="spinner" style="width:14px;height:14px;border-width:2px"></span></div>`;
+
+  // Action buttons
+  const borrowBtn = $('bdBorrowBtn');
+  if (b.avail_copies > 0) {
+    borrowBtn.disabled = false;
+    borrowBtn.style.opacity = '1';
+    borrowBtn.onclick = () => { bdCloseModal(); navigate('issue'); };
+  } else {
+    borrowBtn.disabled = true;
+    borrowBtn.style.opacity = '0.45';
+    borrowBtn.innerHTML = '<i class="fa-solid fa-ban"></i> Unavailable';
+  }
+  $('bdEditBtn').onclick = () => { bdCloseModal(); editBook(b.id); };
+}
+
+// ── Overview tab ──────────────────────────────────────────
+function bdPopulateOverview(b) {
+  $('bdDescText').textContent = b.description || 'No description available for this book.';
+
+  // Genre section
+  if (b.genre) {
+    const meta = (typeof GENRE_META !== 'undefined' && GENRE_META[b.genre]) || { icon: '📚', color: '#c9a84c' };
+    $('bdGenreSection').innerHTML = `
+      <div class="bd-genre-card" style="border-color:${meta.color}44;background:${meta.color}0d">
+        <span class="bd-genre-icon">${meta.icon}</span>
+        <div>
+          <div class="bd-genre-label">Genre</div>
+          <div class="bd-genre-name" style="color:${meta.color}">${escHtml(b.genre)}</div>
+        </div>
+      </div>`;
+  }
+
+  // Wikipedia link
+  if (b.wikipedia_url) {
+    $('bdWikiRow').innerHTML = `<a href="${b.wikipedia_url}" target="_blank" rel="noopener noreferrer" class="bd-wiki-link">
+      <i class="fa-brands fa-wikipedia-w"></i> Learn more about ${escHtml(b.author)} on Wikipedia
+    </a>`;
+  }
+}
+
+// ── Details tab ───────────────────────────────────────────
+function bdPopulateDetails(b) {
+  const fields = [
+    { label: 'ISBN',          icon: 'barcode',          value: b.isbn        || '—' },
+    { label: 'Publisher',     icon: 'building-columns', value: b.publisher   || '—' },
+    { label: 'Year',          icon: 'calendar',         value: b.year        || '—' },
+    { label: 'Editions',      icon: 'layer-group',      value: b.editions    || '—' },
+    { label: 'Total Copies',  icon: 'copy',             value: b.total_copies },
+    { label: 'Avail. Copies', icon: 'book-open',        value: b.avail_copies + ' / ' + b.total_copies },
+    { label: 'Genre',         icon: 'tag',              value: b.genre       || '—' },
+    { label: 'Status',        icon: 'circle-dot',       value: b.avail_copies > 0 ? 'Available' : 'Out of stock' },
+  ];
+  $('bdDetailsGrid').innerHTML = fields.map(f => `
+    <div class="bd-detail-field">
+      <div class="bd-detail-label"><i class="fa-solid fa-${f.icon}"></i> ${f.label}</div>
+      <div class="bd-detail-value">${f.value}</div>
+    </div>`).join('');
+}
+
+// ── Chapters tab ──────────────────────────────────────────
+let _chaptersCache = {};
+
+async function bdLoadChapters(bookId) {
+  const list = $('bdChaptersList');
+  if (_chaptersCache[bookId]) {
+    bdRenderChapters(_chaptersCache[bookId]);
+    return;
+  }
+  list.innerHTML = '<div style="text-align:center;padding:40px 0"><span class="spinner"></span></div>';
+  try {
+    const data = await apiFetch(`/api/books/${bookId}/chapters`);
+    _chaptersCache[bookId] = data;
+    // Update quick-stat pills
+    $('bdStatPages').innerHTML = `<i class="fa-solid fa-file-lines"></i> ${data.pages.toLocaleString()} pages`;
+    $('bdStatChaps').innerHTML = `<i class="fa-solid fa-list-ol"></i> ${data.chapter_count} chapters`;
+    bdRenderChapters(data);
+  } catch {
+    list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0">Could not load chapter data.</p>';
+  }
+}
+
+function bdRenderChapters(data) {
+  const list = $('bdChaptersList');
+  $('bdChaptersMeta').innerHTML = `
+    <span class="bd-chap-meta-pill"><i class="fa-solid fa-file-lines"></i> ${data.pages.toLocaleString()} pages</span>
+    <span class="bd-chap-meta-pill"><i class="fa-solid fa-list-ol"></i> ${data.chapter_count} chapters</span>
+    <span class="bd-chap-meta-pill"><i class="fa-solid fa-clock"></i> ~${Math.round(data.pages / 40)} hr read</span>`;
+
+  list.innerHTML = data.chapters.map((ch, i) => `
+    <div class="bd-chapter-item" style="animation-delay:${i * 30}ms">
+      <div class="bd-chapter-num">${i + 1}</div>
+      <div class="bd-chapter-name">${escHtml(ch)}</div>
+      <div class="bd-chapter-progress">
+        <div class="bd-chapter-progress-bar" style="width:${Math.round((i / data.chapters.length) * 100)}%"></div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Main entry point ──────────────────────────────────────
 window.viewBook = async id => {
+  bdInitTabs();
+  _bdCurrentBook = null;
+  _chaptersCache = {};   // reset on each new book open
+
+  // Reset to Overview tab
+  document.querySelectorAll('.bd-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  document.querySelectorAll('.bd-tab-panel').forEach((p, i) => p.classList.toggle('active', i === 0));
+  // Reset hero title while loading
+  $('bdTitle').textContent = 'Loading…';
+  $('bdAuthorLine').innerHTML = '';
+  $('bdBadgeRow').innerHTML = '';
+  $('bdRatingRow').innerHTML = '';
+  $('bdQuickStats').innerHTML = '';
+  $('bdChaptersList').innerHTML = '<div style="text-align:center;padding:40px 0"><span class="spinner"></span></div>';
+  $('bdChaptersMeta').innerHTML = '';
+
+  bdOpenModal();
+
   try {
     const b = await apiFetch(`/api/books/${id}`);
-    $('viewBookContent').innerHTML = `
-      <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:18px">
-        <div style="width:12px;flex-shrink:0;height:80px;border-radius:4px;background:${b.cover_color}"></div>
-        <div>
-          <h3 style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700">${escHtml(b.title)}</h3>
-          <p style="color:var(--text-sub);margin-top:4px">by ${escHtml(b.author)}</p>
-        </div>
-      </div>
-      <div class="detail-meta">
-        <div class="detail-field"><label>ISBN</label><span>${b.isbn||'—'}</span></div>
-        <div class="detail-field"><label>Genre</label><span>${b.genre||'—'}</span></div>
-        <div class="detail-field"><label>Publisher</label><span>${b.publisher||'—'}</span></div>
-        <div class="detail-field"><label>Year</label><span>${b.year||'—'}</span></div>
-        <div class="detail-field"><label>Rating</label><span>${renderStars(b.rating)}</span></div>
-        <div class="detail-field"><label>Editions</label><span>${b.editions != null ? b.editions + ' edition(s)' : '—'}</span></div>
-        <div class="detail-field"><label>Bestseller</label><span>${b.is_bestseller ? '<span style="color:#c9a84c;font-weight:600">★ Yes</span>' : 'No'}</span></div>
-        <div class="detail-field"><label>Total Copies</label><span>${b.total_copies}</span></div>
-        <div class="detail-field"><label>Available</label><span>${b.avail_copies}</span></div>
-      </div>
-      <div style="margin-top:12px">
-        <a href="${b.wikipedia_url}" target="_blank" rel="noopener noreferrer"
-           style="display:inline-flex;align-items:center;gap:6px;color:var(--gold);font-size:13px;text-decoration:none;border:1px solid rgba(212,168,67,.3);padding:5px 12px;border-radius:6px;transition:all .2s"
-           onmouseover="this.style.background='rgba(212,168,67,.1)'" onmouseout="this.style.background='transparent'">
-          <i class="fa-brands fa-wikipedia-w"></i> View Author on Wikipedia
-        </a>
-      </div>
-      ${b.description ? `<p style="font-size:14px;color:var(--text-sub);line-height:1.7;margin-top:14px">${escHtml(b.description)}</p>` : ''}`;
-    $('viewBookModal').classList.add('open');
-  } catch { toast('Failed to load book details', 'error'); }
+    _bdCurrentBook = b;
+
+    bdPopulateHero(b);
+    bdPopulateOverview(b);
+    bdPopulateDetails(b);
+
+    // Pre-fetch chapters in background (updates stat pills)
+    bdLoadChapters(id);
+  } catch (err) {
+    toast('Failed to load book details', 'error');
+    bdCloseModal();
+  }
 };
 
-$('closeViewBookModal').addEventListener('click', () => $('viewBookModal').classList.remove('open'));
+// ── Color helpers ──────────────────────────────────────────
+function hexToRgb(hex) {
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map(x => x+x).join('');
+  return { r: parseInt(c.substr(0,2),16), g: parseInt(c.substr(2,2),16), b: parseInt(c.substr(4,2),16) };
+}
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(x => Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join('');
+}
+function lightenColor(hex, pct) {
+  const {r,g,b} = hexToRgb(hex);
+  return rgbToHex(r + (255-r)*pct/100, g + (255-g)*pct/100, b + (255-b)*pct/100);
+}
+function darkenColor(hex, pct) {
+  const {r,g,b} = hexToRgb(hex);
+  return rgbToHex(r*(1-pct/100), g*(1-pct/100), b*(1-pct/100));
+}
 
 window.deleteBook = async (id, title) => {
   if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
@@ -815,57 +988,283 @@ document.querySelectorAll('.overlay').forEach(o => {
   o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
 });
 
-// Chat Bot
-function sendMessage() {
-    const input = document.getElementById("chatInput");
-    const messages = document.getElementById("chatMessages");
+// ══════════════════════════════════════════════════════════
+// CHAT BOT
+// ══════════════════════════════════════════════════════════
 
-    const userText = input.value.trim();
-    if (!userText) return;
-
-    // Add user message to chat
-    const userDiv = document.createElement("div");
-    userDiv.className = "message-user";
-    userDiv.innerText = userText;
-    messages.appendChild(userDiv);
-
-    // Send message to Flask backend
-    fetch("http://127.0.0.1:5000/chatbot", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            message: userText
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        const botDiv = document.createElement("div");
-        botDiv.className = "message-bot";
-        botDiv.innerText = data.response;
-        messages.appendChild(botDiv);
-
-        // Auto scroll
-        messages.scrollTop = messages.scrollHeight;
-    })
-    .catch(error => {
-        console.error("Error:", error);
-    });
-
-    input.value = "";
-}
-
-document.getElementById("chatInput").addEventListener("keypress", function(e) {
-    if (e.key === "Enter") {
-        sendMessage();
-    }
-});
+let chatOpen = false;
+let chatInitialized = false;
 
 function toggleChat() {
-    const chat = document.querySelector(".chatbot-container");
-    chat.style.display = chat.style.display === "none" ? "flex" : "none";
+  // FIX: was document.getElementById('chatbotContainer') — the element had no id in HTML,
+  // causing container to be null and crashing here. Now fixed in index.html.
+  const container = $('chatbotContainer');
+  chatOpen = !chatOpen;
+  if (chatOpen) {
+    container.classList.add('open');
+    if (!chatInitialized) {
+      chatInitialized = true;
+      showWelcomeMessage();
+    }
+    setTimeout(() => $('chatInput').focus(), 200);
+  } else {
+    container.classList.remove('open');
+  }
 }
+
+function showWelcomeMessage() {
+  const welcomeText = `Hello! I'm your **Library Assistant** 📚\n\nI can help you with:\n- Book recommendations\n- Checking availability\n- Finding members\n- Overdue information\n\nWhat would you like to know?`;
+  appendBotMessage(welcomeText, true);
+}
+
+function formatBotResponse(text) {
+  // Convert **bold** to <strong>
+  text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Convert *italic* to <em>
+  text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+  const lines = text.split('\n');
+  let html = '';
+  let inList = false;
+  let listItems = [];
+
+  const flushList = () => {
+    if (listItems.length) {
+      html += '<ul class="bot-list">' + listItems.map(li => `<li>${li}</li>`).join('') + '</ul>';
+      listItems = [];
+      inList = false;
+    }
+  };
+
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList();
+      html += '<br>';
+    } else if (/^[-•*]\s/.test(trimmed)) {
+      inList = true;
+      listItems.push(trimmed.replace(/^[-•*]\s/, ''));
+    } else {
+      flushList();
+      html += `<span>${trimmed}</span><br>`;
+    }
+  });
+  flushList();
+
+  // Clean up leading/trailing <br>
+  return html.replace(/^(<br>)+|(<br>)+$/g, '');
+}
+
+function appendBotMessage(text, isWelcome = false) {
+  const messages = $('chatMessages');
+  const row = document.createElement('div');
+  row.className = 'msg-row bot';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = '📚';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'message-bot';
+  if (isWelcome) {
+    bubble.innerHTML = `<span class="bot-label">Assistant</span><br>` + formatBotResponse(text);
+  } else {
+    bubble.innerHTML = formatBotResponse(text);
+  }
+
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  messages.appendChild(row);
+  messages.scrollTop = messages.scrollHeight;
+  return row;
+}
+
+function appendUserMessage(text) {
+  const messages = $('chatMessages');
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.innerHTML = '<i class="fa-solid fa-user" style="font-size:11px;color:var(--gold)"></i>';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'message-user';
+  bubble.textContent = text;
+
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  messages.appendChild(row);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function showTypingIndicator() {
+  const messages = $('chatMessages');
+  const row = document.createElement('div');
+  row.className = 'msg-row bot';
+  row.id = 'typingRow';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = '📚';
+
+  const indicator = document.createElement('div');
+  indicator.className = 'typing-indicator';
+  indicator.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+
+  row.appendChild(avatar);
+  row.appendChild(indicator);
+  messages.appendChild(row);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  const el = $('typingRow');
+  if (el) el.remove();
+}
+
+function useSuggestion(text) {
+  $('chatInput').value = text;
+  // Hide suggestions after first use
+  const suggestions = $('chatSuggestions');
+  if (suggestions) suggestions.style.display = 'none';
+  sendMessage();
+}
+
+function sendMessage() {
+  const input = $('chatInput');
+  const userText = input.value.trim();
+  if (!userText) return;
+
+  // Hide suggestions once user starts chatting
+  const suggestions = $('chatSuggestions');
+  if (suggestions) suggestions.style.display = 'none';
+
+  appendUserMessage(userText);
+  input.value = '';
+
+  showTypingIndicator();
+
+  // FIX: was hardcoded "http://127.0.0.1:5000/chatbot" — breaks in any non-local environment.
+  // Now uses the API constant (same-origin) like every other fetch call in this file.
+  fetch(API + '/chatbot', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: userText })
+  })
+  .then(response => response.json())
+  .then(data => {
+    removeTypingIndicator();
+    appendBotMessage(data.response);
+  })
+  .catch(error => {
+    removeTypingIndicator();
+    appendBotMessage("Sorry, I'm having trouble connecting right now. Please try again shortly.");
+    console.error('Chatbot error:', error);
+  });
+}
+
+$('chatInput').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') sendMessage();
+});
+
+// ══════════════════════════════════════════════════════════
+// TRENDING SHELVES  (OTT-style)
+// ══════════════════════════════════════════════════════════
+async function loadTrending() {
+  const wrap = $('trendingShelves');
+  if (!wrap) return;
+  try {
+    const data = await apiFetch('/api/trending');
+    renderTrendingShelves(data.shelves);
+  } catch (e) {
+    console.error('Trending load error', e);
+    wrap.innerHTML = '';
+  }
+}
+
+function renderTrendingShelves(shelves) {
+  const wrap = $('trendingShelves');
+  if (!shelves || !shelves.length) { wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = shelves.map((shelf, si) => `
+    <div class="shelf-section" id="shelf-${shelf.id}">
+      <div class="shelf-header">
+        <div>
+          <div class="shelf-label">${shelf.label}</div>
+          <div class="shelf-sublabel">${shelf.sublabel}</div>
+        </div>
+        <button class="shelf-see-all" onclick="navigateWithGenre(''); navigate('books')">
+          See all <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+      <div class="shelf-row-wrapper">
+        <button class="shelf-arrow left" onclick="shelfScroll('shelf-row-${si}', -1)" aria-label="Scroll left">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <div class="shelf-row" id="shelf-row-${si}">
+          ${shelf.books.map((book, bi) => renderBookCard(book, bi, shelf.id === 'trending')).join('')}
+        </div>
+        <button class="shelf-arrow right" onclick="shelfScroll('shelf-row-${si}', 1)" aria-label="Scroll right">
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderBookCard(book, index, showRank) {
+  const stars = book.rating
+    ? '★'.repeat(Math.round(book.rating)) + '☆'.repeat(5 - Math.round(book.rating))
+    : '';
+  const availClass = book.avail_copies > 0 ? 'yes' : 'no';
+  const availText  = book.avail_copies > 0 ? 'Available' : 'Out';
+
+  // Darken the cover color slightly for text contrast
+  const textContrast = isLightColor(book.cover_color) ? '#1a1a1a' : '#ffffff';
+
+  return `
+    <div class="book-card" onclick="viewBook(${book.id})" title="${escHtml(book.title)}">
+      <div class="book-cover" style="background:${book.cover_color}">
+        ${showRank ? `<div class="book-rank">${index + 1}</div>` : ''}
+        ${book.is_bestseller ? `<div class="bestseller-flame" title="Bestseller">🔥</div>` : ''}
+        <div class="book-cover-spine">
+          <div class="book-cover-title" style="color:${textContrast}">${escHtml(book.title)}</div>
+          <div class="book-cover-author" style="color:${textContrast}88">${escHtml(book.author)}</div>
+        </div>
+        <div class="book-cover-overlay"></div>
+      </div>
+      <div class="book-card-body">
+        <div class="book-card-title" title="${escHtml(book.title)}">${escHtml(book.title)}</div>
+        <div class="book-card-author">${escHtml(book.author)}</div>
+        <div class="book-card-meta">
+          <span class="book-card-rating" title="${book.rating ? book.rating + '/5' : 'No rating'}">${
+            book.rating
+              ? `<span style="color:#f5c518">${stars}</span> <span style="color:var(--text-muted);font-size:10px">${book.rating.toFixed(1)}</span>`
+              : '<span style="color:var(--text-muted)">No rating</span>'
+          }</span>
+          <span class="book-card-avail ${availClass}">${availText}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function shelfScroll(rowId, dir) {
+  const row = $(rowId);
+  if (row) row.scrollBy({ left: dir * 600, behavior: 'smooth' });
+}
+
+// Simple luminance check to pick text color on covers
+function isLightColor(hex) {
+  if (!hex || hex.length < 4) return false;
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map(x => x+x).join('');
+  const r = parseInt(c.substr(0,2),16);
+  const g = parseInt(c.substr(2,2),16);
+  const b = parseInt(c.substr(4,2),16);
+  return (r*299 + g*587 + b*114) / 1000 > 140;
+}
+
 // ══════════════════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════════════════
