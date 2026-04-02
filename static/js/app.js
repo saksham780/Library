@@ -84,12 +84,15 @@ function navigate(page) {
     issue: 'Issue a Book',
   }[page] || '';
 
+  // Update browser URL so back button works
+  history.pushState({ page }, '', `#${page}`);
+
   // Load data for the page
   if (page === 'dashboard')    loadDashboard();
-  if (page === 'books')        loadBooks();
-  if (page === 'members')      loadMembers();
-  if (page === 'transactions') loadTransactions();
-  if (page === 'issue')        loadIssueForm();
+  else if (page === 'books')        loadBooks();
+  else if (page === 'members')      loadMembers();
+  else if (page === 'transactions') loadTransactions();
+  else if (page === 'issue')        loadIssueForm();
 }
 
 // Navigate to transactions with a pre-set status filter
@@ -1264,6 +1267,23 @@ function isLightColor(hex) {
   const b = parseInt(c.substr(4,2),16);
   return (r*299 + g*587 + b*114) / 1000 > 140;
 }
+
+// Handle browser back/forward button
+window.addEventListener('popstate', (e) => {
+  const page = e.state?.page || 'dashboard';
+  navigate(page);
+});
+
+// On first load, check if URL has a hash and navigate to it
+window.addEventListener('DOMContentLoaded', () => {
+  const hash = window.location.hash.replace('#', '');
+  if (hash && pages[hash]) {
+    navigate(hash);
+  } else {
+    navigate('dashboard');
+    history.replaceState({ page: 'dashboard' }, '', '#dashboard');
+  }
+});
 
 // ══════════════════════════════════════════════════════════
 // BOOT
